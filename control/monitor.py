@@ -106,6 +106,54 @@ def start_cron():
     print("Iniciando cron...")
     schedule.every(5).minutes.do(analyze_data)
     print("Servicio de control iniciado")
+    schedule.every(2).minutes.do(test_temprature)
+    print("Servicio de control iniciado")
     while 1:
         schedule.run_pending()
         time.sleep(1)
+
+'''ADICIÓN RETO SEMANA 6'''
+def test_temprature():
+    # Consulta todos los datos de los últimos 5 minutos, los agrupa por estación y variable.
+    # Si la temperature supera los 25 Cº, se envia un mensaje de alerta.
+
+    print("Calculando alertas RETO SEMANA 6...")
+
+    data = Data.objects.filter(
+        base_time__gte=datetime.now() - timedelta(minutes=5))
+    aggregation = data.annotate(check_value=Avg('avg_value')) \
+        .select_related('station', 'measurement') \
+        .select_related('station__user', 'station__location') \
+        .select_related('station__location__city', 'station__location__state',
+                        'station__location__country') \
+        .values('check_value', 'station__user__username',
+                'measurement__name',
+                'measurement__max_value',
+                'measurement__min_value',
+                'station__location__city__name',
+                'station__location__state__name',
+                'station__location__country__name')
+    alerts1 = 0
+    for item1 in aggregation:
+        if item1["measurement__name"] == "temperatura":
+            alert = False
+
+            variable = item1["measurement__name"]
+            max_value = 25
+
+            country = item1['station__location__country__name']
+            state = item1['station__location__state__name']
+            city = item1['station__location__city__name']
+            user = item1['station__user__username']
+
+            if item1["check_value"] > max_value:
+                alert = True
+
+            if alert:
+                message = "RETO_S6 {} {} excede límite".format(variable, max_value)
+                topic = '{}/{}/{}/{}/in'.format(country, state, city, user)
+                print(datetime.now(), "Enviando alerta RETO_S6 a... {} {}".format(topic, variable))
+                client.publish(topic, message)
+                alerts1 += 1
+        print("Reto S6 temperatura revisada")
+        print(alerts1, "Alerta enviada RETO_S6")
